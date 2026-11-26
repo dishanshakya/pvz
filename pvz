@@ -1,0 +1,2 @@
+#!/usr/bin/env sh
+exec env SDL_AUDIO_DRIVER=alsa pvz-portable "$@"

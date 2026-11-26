@@ -1,0 +1,5 @@
+*.pak
+*.zip
+*.rar
+*.pkg.tar.*
+properties/

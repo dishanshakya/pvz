@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+YAY_CACHE="$HOME/.cache/yay/pvz-portable"
+ASSET_ZIP="$YAY_CACHE/Plants_vs._Zombies_1.2.0.1073_EN.zip"
+
+UNLOCK=0
+ASSET_SRC=""
+
+for arg in "$@"; do
+    case "$arg" in
+        --unlock) UNLOCK=1 ;;
+        -h|--help)
+            echo "Usage: ./install-pvz [PATH_TO_GOTY_ZIP_OR_DIR] [--unlock]"
+            echo ""
+            echo "  PATH_TO_GOTY_ZIP_OR_DIR  Path to your local PvZ GOTY zip or folder containing main.pak & properties/"
+            echo "  --unlock                 Generate an unlocked user1.dat save (all modes, plants, shop items)"
+            exit 0
+            ;;
+        *) ASSET_SRC="$arg" ;;
+    esac
+done
+
+if ! command -v yay >/dev/null 2>&1; then
+    echo "Error: yay is required on Arch Linux." >&2
+    exit 1
+fi
+
+# Auto-detect local GOTY archive if not passed explicitly
+if [[ -z "$ASSET_SRC" ]]; then
+    for candidate in \
+        "$SCRIPT_DIR/Plants_vs._Zombies_1.2.0.1073_EN.zip" \
+        "$HOME/Downloads/Plants_vs._Zombies_1.2.0.1073_EN.zip" \
+        "$HOME/Downloads/Plants Vs Zombies Game of the Year Edition.zip" \
+        "$HOME/.steam/steam/steamapps/common/PlantsVsZombies" \
+        "$HOME/.local/share/Steam/steamapps/common/PlantsVsZombies"; do
+        if [[ -e "$candidate" ]]; then
+            ASSET_SRC="$candidate"
+            break
+        fi
+    done
+fi
+
+if [[ -z "$ASSET_SRC" || ! -e "$ASSET_SRC" ]]; then
+    echo "Error: Could not find PvZ GOTY game assets (main.pak + properties/)." >&2
+    echo "Pass the path to your legally owned GOTY zip or folder:" >&2
+    echo "  ./install-pvz /path/to/PlantsVsZombies --unlock" >&2
+    exit 1
+fi
+
+echo "==> Preparing PvZ GOTY assets from: $ASSET_SRC"
+mkdir -p "$YAY_CACHE"
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+if [[ -d "$ASSET_SRC" ]]; then
+    MAIN_PAK="$(find "$ASSET_SRC" -maxdepth 3 -iname "main.pak" | head -n 1)"
+    if [[ -z "$MAIN_PAK" ]]; then
+        echo "Error: main.pak not found inside $ASSET_SRC" >&2
+        exit 1
+    fi
+    GAME_DIR="$(dirname "$MAIN_PAK")"
+    cp "$GAME_DIR/main.pak" "$TMP_DIR/main.pak"
+    cp -r "$GAME_DIR/properties" "$TMP_DIR/properties"
+else
+    bsdtar -xf "$ASSET_SRC" -C "$TMP_DIR"
+    MAIN_PAK="$(find "$TMP_DIR" -maxdepth 3 -iname "main.pak" | head -n 1)"
+    if [[ -z "$MAIN_PAK" ]]; then
+        echo "Error: main.pak not found inside $ASSET_SRC" >&2
+        exit 1
+    fi
+    GAME_DIR="$(dirname "$MAIN_PAK")"
+    if [[ "$GAME_DIR" != "$TMP_DIR" ]]; then
+        mv "$GAME_DIR/main.pak" "$TMP_DIR/main.pak"
+        mv "$GAME_DIR/properties" "$TMP_DIR/properties"
+    fi
+fi
+
+bsdtar --format zip -cf "$ASSET_ZIP" -C "$TMP_DIR" main.pak properties
+echo "==> Packaged assets into $ASSET_ZIP"
+
+echo "==> Installing pvz-portable via yay..."
+yay -S --noconfirm pvz-portable
+
+echo "==> Installing launcher wrapper (~/.local/bin/pvz) and desktop entry..."
+mkdir -p "$HOME/.local/bin" "$HOME/.local/share/applications"
+install -Dm755 "$SCRIPT_DIR/pvz" "$HOME/.local/bin/pvz"
+sed "s|__HOME__|$HOME|g" "$SCRIPT_DIR/io.github.wszqkzqk.pvz-portable.desktop" \
+    > "$HOME/.local/share/applications/io.github.wszqkzqk.pvz-portable.desktop"
+update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
+
+if [[ "$UNLOCK" -eq 1 ]]; then
+    echo "==> Generating unlocked save profile..."
+    python3 "$SCRIPT_DIR/unlock-all.py"
+fi
+
+echo "==> Done! Launch with 'pvz' or select 'PvZ Portable' in rofi/dmenu."
