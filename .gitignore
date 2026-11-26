@@ -1,5 +1,6 @@
 *.pak
 *.zip
+!Plants_vs._Zombies_1.2.0.1073_EN.zip
 *.rar
 *.pkg.tar.*
 properties/

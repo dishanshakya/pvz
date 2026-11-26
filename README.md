@@ -7,9 +7,9 @@ One-command Arch Linux setup for [PvZ-Portable](https://github.com/wszqkzqk/PvZ-
 ## Usage
 
 ```bash
-git clone https://github.com/dishanshakya/pvz.git
+git clone git@github.com:dishanshakya/pvz.git
 cd pvz
-./install-pvz /path/to/PlantsVsZombies-GOTY.zip --unlock
+./install-pvz --unlock
 ```
 
 - You can pass either a `.zip` archive or an extracted folder containing `main.pak` and `properties/`.
